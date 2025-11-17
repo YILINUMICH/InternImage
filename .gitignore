@@ -8,3 +8,36 @@ checkpoint_dir/
 demo/
 pretrained/
 upload.py
+
+# Evaluation Framework - Data and models (too large)
+evaluation_framework/data/*
+!evaluation_framework/data/.gitkeep
+evaluation_framework/models/pretrained/*
+!evaluation_framework/models/pretrained/.gitkeep
+evaluation_framework/results/*
+!evaluation_framework/results/.gitkeep
+evaluation_framework/benchmarks/*
+!evaluation_framework/benchmarks/.gitkeep
+
+# Dataset files
+*.tfrecord
+*.bin
+
+# Model files
+*.pth
+*.pt
+*.ckpt
+
+# Results and logs
+results/
+outputs/
+work_dirs/
+logs/
+*.log
+
+# Image outputs
+test_output/
+*.jpg
+*.jpeg
+*.png
+!docs/**/*.png
