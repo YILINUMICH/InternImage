@@ -380,3 +380,57 @@ python quick_start.py --dataset waymo --model internimage_s
 ```
 
 Good luck with your evaluation! 🚀
+
+## 🖥️ GPU Compatibility (RTX 5080 / Blackwell sm_120)
+
+Your current GPU (RTX 5080, Blackwell architecture – CUDA compute capability `sm_120`) is ahead of the officially supported architectures in the PyTorch builds we tested (stable 2.5.1 + cu121 and nightly 2.7.0.dev + cu124). As of November 2025:
+
+- Supported architectures in public wheels: `sm_50 sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_90`
+- Missing architecture: `sm_120` (Blackwell). PyTorch emits a warning and compiled CUDA extensions fail with: `RuntimeError: CUDA error: no kernel image is available for execution on the device`.
+- DCNv3 kernels (and other custom ops) cannot execute because no binary code or PTX path can JIT to the new architecture yet.
+
+### What This Means
+You can finish framework setup (datasets, configs, analysis tools) but any evaluation requiring DCNv3 GPU kernels or mmcv CUDA ops will not run on the RTX 5080 until PyTorch adds native Blackwell support.
+
+### Verification Commands
+Use the provided script (added in `scripts/check_gpu_support.py`) or run manually:
+```powershell
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0)); print('Is Available:', torch.cuda.is_available())"
+```
+Check compiled arch list (may not include sm_120):
+```powershell
+python -c "import torch; print(torch.cuda.get_arch_list())"
+```
+If `sm_120` (or `compute_120`) is absent, the wheel cannot natively target Blackwell.
+
+### Workaround Options
+1. Use a supported GPU (e.g., RTX 3090/4090, A100, H100) for experiments.
+2. Wait for an official PyTorch release (likely ≥ 2.6) including Blackwell.
+3. Periodically test new nightlies: 
+    ```powershell
+    pip uninstall torch torchvision -y
+    pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu12x
+    ```
+    (Replace `cu12x` with the newest CUDA minor once Blackwell support lands.)
+4. Try a source build (advanced; may still fail until upstream patches merge):
+    ```powershell
+    git clone --recursive https://github.com/pytorch/pytorch.git
+    cd pytorch
+    setx TORCH_CUDA_ARCH_LIST "9.0+PTX"   # Temporary; sm_120 unsupported
+    pip install -r requirements.txt
+    python setup.py develop
+    ```
+    If build errors mention unknown arch `12.0` or missing code generation, upstream support is still pending.
+
+### Why PTX Didn’t Help
+Although compiling with `9.0+PTX` allows PTX fallback for future GPUs, the low-level kernels (DCNv3) still rely on PyTorch’s dispatcher and generated code paths that expect recognized architectures. Without explicit `sm_120` support, PTX JIT cannot bridge all gaps for these custom ops.
+
+### Recommended Interim Plan
+- Proceed with dataset preparation and analysis tooling development.
+- Mock evaluation outputs using saved results from a supported GPU environment (if available) to exercise analysis scripts.
+- Track PyTorch release notes / GitHub issues related to “Blackwell” or “sm_120” enabling.
+
+### Quick Mock Strategy (Optional)
+You can simulate detection outputs by placing JSON result files under `results/waymo/` or `results/nuscenes/` that match expected structure, then run analysis scripts to validate logic without GPU inference.
+
+---

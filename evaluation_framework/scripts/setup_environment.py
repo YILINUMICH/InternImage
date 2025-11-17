@@ -50,26 +50,50 @@ class EnvironmentSetup:
             print("✗ CUDA (nvcc) not found. Please install CUDA toolkit.")
             return False
     
-    def install_pytorch(self, cuda_version="11.3"):
+    def install_pytorch(self, cuda_version="12.1"):
         """Install PyTorch with CUDA support"""
         print(f"\nInstalling PyTorch with CUDA {cuda_version}...")
         
-        # Map CUDA version to torch package
-        cuda_map = {
-            "11.3": "cu113",
-            "11.7": "cu117",
-            "11.8": "cu118",
-            "12.1": "cu121"
-        }
+        # Detect CUDA version from nvcc if available
+        try:
+            result = subprocess.run(['nvcc', '--version'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                # Extract CUDA version from output (e.g., "release 12.8" -> "12.8")
+                import re
+                match = re.search(r'release (\d+\.\d+)', result.stdout)
+                if match:
+                    detected_cuda = match.group(1)
+                    print(f"  Detected CUDA version: {detected_cuda}")
+                    cuda_version = detected_cuda
+        except:
+            pass
         
-        cuda_suffix = cuda_map.get(cuda_version, "cu113")
-        torch_version = "1.11.0" if cuda_version == "11.3" else "2.0.0"
+        # Map CUDA version to torch package (use latest compatible)
+        cuda_major = float(cuda_version.split('.')[0])
+        
+        if cuda_major >= 12:
+            # CUDA 12.x - use cu121 (PyTorch cu121 works for CUDA 12.x)
+            cuda_suffix = "cu121"
+            torch_version = "2.9.1"  # Latest stable
+            torchvision_version = "0.19.1"
+        elif cuda_major >= 11.8:
+            cuda_suffix = "cu118"
+            torch_version = "2.9.1"
+            torchvision_version = "0.19.1"
+        else:
+            # Older CUDA, use compatible version
+            cuda_suffix = "cu117"
+            torch_version = "2.0.0"
+            torchvision_version = "0.15.0"
+        
+        print(f"  Installing PyTorch {torch_version} with {cuda_suffix}")
         
         cmd = [
             sys.executable, "-m", "pip", "install",
-            f"torch=={torch_version}+{cuda_suffix}",
-            f"torchvision==0.12.0+{cuda_suffix}" if cuda_version == "11.3" else f"torchvision==0.15.0+{cuda_suffix}",
-            "-f", "https://download.pytorch.org/whl/torch_stable.html"
+            f"torch=={torch_version}",
+            f"torchvision=={torchvision_version}",
+            "--index-url", f"https://download.pytorch.org/whl/{cuda_suffix}"
         ]
         
         subprocess.run(cmd, check=True)
@@ -293,8 +317,8 @@ def main():
     parser.add_argument("--base-dir", type=str, 
                        default=None,
                        help="Base directory for evaluation framework")
-    parser.add_argument("--cuda-version", type=str, default="11.3",
-                       help="CUDA version (11.3, 11.7, 11.8, 12.1)")
+    parser.add_argument("--cuda-version", type=str, default="auto",
+                       help="CUDA version (auto, 11.7, 11.8, 12.1, 12.8) - 'auto' detects from nvcc")
     parser.add_argument("--skip-pytorch", action="store_true",
                        help="Skip PyTorch installation")
     parser.add_argument("--skip-dcnv3", action="store_true",
